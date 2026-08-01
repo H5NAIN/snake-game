@@ -345,6 +345,36 @@
 </div>
 
 <script type="module">
+/* ============================================================================
+   SECURITY NOTES — READ BEFORE DEPLOYING
+   ----------------------------------------------------------------------------
+   Everything below (grid-limit checks, in-memory score validation, variable
+   renaming) runs in the PLAYER'S OWN BROWSER. It stops casual tampering and
+   catches obvious console/cheat-engine edits, but anyone can still open
+   devtools, disable JS breakpoints, or fire a raw HTTPS request straight at
+   Firestore with a fabricated score — client code can never truly stop that.
+
+   The only durable fix is to mirror these same caps in Firestore Security
+   Rules (Firebase Console → Firestore Database → Rules), so the SERVER
+   rejects any write that violates them, e.g.:
+
+     match /leaderboard/{playerId} {
+       allow read: if true;
+       allow write: if request.resource.data.score is int
+         && request.resource.data.score > 0
+         && request.resource.data.score <= (
+              request.resource.data.mapSize == 'small'  ? 400  :
+              request.resource.data.mapSize == 'medium' ? 700  :
+              request.resource.data.mapSize == 'large'   ? 1200 : 0
+            );
+     }
+
+   Keep the numbers 400 / 700 / 1200 identical here and in the rule above —
+   if they ever drift apart, the client and server will disagree and either
+   reject legit scores or let cheated ones through. Consider also adding a
+   Cloud Function with App Check to rate-limit writes per player.
+   ============================================================================ */
+
   // ================= Firebase setup =================
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import {
@@ -354,7 +384,7 @@
 
   const firebaseConfig = {
     apiKey: "AIzaSyDivTahL5W64LbD429u-Z_-pINwu8RS1YM",
-    authDomain: "leaderboard-b0ff9.firebaseapp.com", // fixed: was missing the project subdomain
+    authDomain: "leaderboard-b0ff9.firebaseapp.com",
     projectId: "leaderboard-b0ff9",
     storageBucket: "leaderboard-b0ff9.firebasestorage.app",
     messagingSenderId: "778795650458",
@@ -363,51 +393,58 @@
   };
 
   let db = null;
-  try {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-  } catch (e) {
-    console.warn("Firebase failed to initialize — leaderboard will be unavailable.", e);
-  }
+  try { const _a = initializeApp(firebaseConfig); db = getFirestore(_a); }
+  catch (e) { console.warn("Firebase failed to initialize — leaderboard will be unavailable.", e); }
 
-  // Each player gets one persistent row, keyed by a random ID stored in their
-  // browser. Renaming updates that same row next time they play. The row only
-  // gets overwritten when the new score beats their previous best.
+  // Upgrade #1: dynamic grid-limit table. Cells = cols*rows; caps below are the
+  // designer-supplied theoretical max score for a perfect run on each map.
+  const MAP_GRIDS = { small: { cols: 16, rows: 11 }, medium: { cols: 22, rows: 15 }, large: { cols: 28, rows: 19 } };
+  const MAP_SCORE_CAPS = { small: 400, medium: 700, large: 1200 };
+
+  function gridCells(m) { const g = MAP_GRIDS[m]; return g ? g.cols * g.rows : 0; }
+
   function getPlayerId() {
     let id = localStorage.getItem("playerId");
-    if (!id) {
-      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-      localStorage.setItem("playerId", id);
-    }
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()); localStorage.setItem("playerId", id); }
     return id;
   }
 
   async function submitScoreToCloud(name, score, mapSize, difficulty) {
     if (!db) return;
+
+    // --- Upgrade #1: reject anything above the physical/theoretical max for the map ---
+    const cap = MAP_SCORE_CAPS[mapSize] ?? 0;
+    if (!Number.isFinite(score) || score < 0 || score > cap) {
+      console.warn(`[anti-cheat] rejected submission — score ${score} exceeds cap ${cap} for map "${mapSize}" (${gridCells(mapSize)} cells). Flagged as hacker.`, { name, score, mapSize, difficulty });
+      flagSuspiciousClient("score_over_cap");
+      return;
+    }
+
     try {
-      const playerId = getPlayerId();
-      const ref = doc(db, "leaderboard", playerId);
+      const pid = getPlayerId();
+      const ref = doc(db, "leaderboard", pid);
       const existing = await getDoc(ref);
       const prevBest = existing.exists() ? (existing.data().score || 0) : -1;
-      if (score <= prevBest) return; // not a new personal best, don't overwrite
+      if (score <= prevBest) return;
+      await setDoc(ref, { name, score, mapSize, difficulty, timestamp: serverTimestamp() });
+    } catch (e) { console.warn("Could not submit score to leaderboard:", e); }
+  }
 
-      await setDoc(ref, {
-        name, score, mapSize, difficulty,
-        timestamp: serverTimestamp()
-      });
-    } catch (e) {
-      console.warn("Could not submit score to leaderboard:", e);
-    }
+  // Lightweight local flag so repeated cap violations are visible in devtools/analytics
+  // without blocking the player from just playing a normal game afterwards.
+  function flagSuspiciousClient(reason) {
+    try {
+      const n = (parseInt(localStorage.getItem("flagCount") || "0", 10) || 0) + 1;
+      localStorage.setItem("flagCount", String(n));
+      localStorage.setItem("lastFlagReason", reason);
+    } catch (e) {}
   }
 
   const MEDALS = ["🥇", "🥈", "🥉"];
 
   function renderLeaderboard(rows) {
     const body = document.getElementById("leaderboardBody");
-    if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="5" class="lb-empty">No scores yet — be the first!</td></tr>';
-      return;
-    }
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="lb-empty">No scores yet — be the first!</td></tr>'; return; }
     body.innerHTML = rows.map((r, i) => {
       const name = r.name || "???";
       const initial = escapeHtml(name.charAt(0).toUpperCase());
@@ -429,32 +466,17 @@
     }).join("");
   }
 
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]));
-  }
-
-  function capitalize(s) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
+  function escapeHtml(str) { return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
   function startLeaderboardListener() {
-    if (!db) {
-      document.getElementById("leaderboardBody").innerHTML =
-        '<tr><td colspan="5" class="lb-error">Leaderboard unavailable (Firebase did not initialize).</td></tr>';
-      return;
-    }
+    if (!db) { document.getElementById("leaderboardBody").innerHTML = '<tr><td colspan="5" class="lb-error">Leaderboard unavailable (Firebase did not initialize).</td></tr>'; return; }
     const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(50));
-    onSnapshot(q, (snapshot) => {
-      renderLeaderboard(snapshot.docs.map(d => d.data()));
-    }, (err) => {
+    onSnapshot(q, (snapshot) => { renderLeaderboard(snapshot.docs.map(d => d.data())); }, (err) => {
       console.warn("Leaderboard listener error:", err);
-      document.getElementById("leaderboardBody").innerHTML =
-        '<tr><td colspan="5" class="lb-error">Could not load leaderboard. Check your Firestore security rules.</td></tr>';
+      document.getElementById("leaderboardBody").innerHTML = '<tr><td colspan="5" class="lb-error">Could not load leaderboard. Check your Firestore security rules.</td></tr>';
     });
   }
-
   startLeaderboardListener();
 
   // ================= Username modal =================
@@ -466,39 +488,22 @@
   let playerName = localStorage.getItem("playerName") || "";
   let gameStarted = false;
 
-  function isModalOpen() {
-    return nameModal.style.display === "flex";
-  }
-
-  function showNameModal() {
-    nameInput.value = playerName;
-    nameModal.style.display = "flex";
-    setTimeout(() => nameInput.focus(), 0);
-  }
-
-  function hideNameModal() {
-    nameModal.style.display = "none";
-  }
-
+  function isModalOpen() { return nameModal.style.display === "flex"; }
+  function showNameModal() { nameInput.value = playerName; nameModal.style.display = "flex"; setTimeout(() => nameInput.focus(), 0); }
+  function hideNameModal() { nameModal.style.display = "none"; }
   function confirmName() {
     const val = nameInput.value.trim().slice(0, 10);
     if (!val) return;
     playerName = val;
     localStorage.setItem("playerName", playerName);
     hideNameModal();
-    if (!gameStarted) {
-      gameStarted = true;
-      resetGame();
-    }
+    if (!gameStarted) { gameStarted = true; resetGame(); }
   }
-
   nameSubmitBtn.addEventListener("click", confirmName);
-  nameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") confirmName();
-  });
+  nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") confirmName(); });
   nameBtn.addEventListener("click", showNameModal);
 
-  // ================= Game (core logic preserved) =================
+  // ================= Game (core logic preserved, internals compacted) =================
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   const scoreboard = document.getElementById("scoreboard");
@@ -516,37 +521,23 @@
   const musicVol = document.getElementById("musicVol");
   const pauseBtn = document.getElementById("pauseBtn");
 
-  const WALL = 3;
-  const COUNTDOWN_START = 3;
-  const PARTICLE_COUNT = 12;
-  const COMBO_WINDOW_MS = 3000;
+  const WALL = 3, CD0 = 3, PCOUNT = 12, COMBO_MS = 3000;
 
-  const MAPS = {
-    small:  { cols: 16, rows: 11, cell: 32 },
-    medium: { cols: 22, rows: 15, cell: 28 },
-    large:  { cols: 28, rows: 19, cell: 24 }
-  };
+  const MAPS = { small: { cols: 16, rows: 11, cell: 32 }, medium: { cols: 22, rows: 15, cell: 28 }, large: { cols: 28, rows: 19, cell: 24 } };
 
   const FRUITS = [
-    { emoji: "🍎", glow: "#ff1744" },
-    { emoji: "🍊", glow: "#ff9800" },
-    { emoji: "🍌", glow: "#ffee00" },
-    { emoji: "🍇", glow: "#b266ff" },
-    { emoji: "🍐", glow: "#76ff03" },
-    { emoji: "🍉", glow: "#00ff66" },
-    { emoji: "🍓", glow: "#ff3366" },
-    { emoji: "🍍", glow: "#ffd000" },
-    { emoji: "🍒", glow: "#ff0033" },
-    { emoji: "🍑", glow: "#ff9966" },
-    { emoji: "🍋", glow: "#ffff00" }
+    { emoji: "🍎", glow: "#ff1744" }, { emoji: "🍊", glow: "#ff9800" }, { emoji: "🍌", glow: "#ffee00" },
+    { emoji: "🍇", glow: "#b266ff" }, { emoji: "🍐", glow: "#76ff03" }, { emoji: "🍉", glow: "#00ff66" },
+    { emoji: "🍓", glow: "#ff3366" }, { emoji: "🍍", glow: "#ffd000" }, { emoji: "🍒", glow: "#ff0033" },
+    { emoji: "🍑", glow: "#ff9966" }, { emoji: "🍋", glow: "#ffff00" }
   ];
 
   const SKINS = [
-    { id: "classic", name: "Classic",   unlock: 0,   body: "#1a237e", eye: "#ffffff" },
-    { id: "emerald", name: "Emerald",   unlock: 15,  body: "#00c853", eye: "#0d1117" },
-    { id: "inferno", name: "Inferno",   unlock: 30,  body: "#d50000", eye: "#ffee00" },
-    { id: "golden",  name: "Golden",    unlock: 60,  body: "#ffab00", eye: "#3e2723" },
-    { id: "void",    name: "Void",      unlock: 100, body: "#6a1b9a", eye: "#00e5ff" }
+    { id: "classic", name: "Classic", unlock: 0, body: "#1a237e", eye: "#ffffff" },
+    { id: "emerald", name: "Emerald", unlock: 15, body: "#00c853", eye: "#0d1117" },
+    { id: "inferno", name: "Inferno", unlock: 30, body: "#d50000", eye: "#ffee00" },
+    { id: "golden", name: "Golden", unlock: 60, body: "#ffab00", eye: "#3e2723" },
+    { id: "void", name: "Void", unlock: 100, body: "#6a1b9a", eye: "#00e5ff" }
   ];
 
   let highScore = parseInt(localStorage.getItem("hHigh"), 10) || 0;
@@ -558,10 +549,7 @@
 
   highScoreEl.textContent = highScore;
 
-  function unlockedSkins() {
-    return SKINS.filter(s => highScore >= s.unlock);
-  }
-
+  function unlockedSkins() { return SKINS.filter(s => highScore >= s.unlock); }
   function populateSkinSelect() {
     skinSelect.innerHTML = "";
     for (const s of SKINS) {
@@ -575,106 +563,50 @@
     if (!unlockedSkins().some(s => s.id === skinId)) skinId = "classic";
     skinSelect.value = skinId;
   }
-
-  function currentSkin() {
-    return SKINS.find(s => s.id === skinId) || SKINS[0];
-  }
-
-  skinSelect.addEventListener("change", () => {
-    skinId = skinSelect.value;
-    localStorage.setItem("skinId", skinId);
-  });
-
+  function currentSkin() { return SKINS.find(s => s.id === skinId) || SKINS[0]; }
+  skinSelect.addEventListener("change", () => { skinId = skinSelect.value; localStorage.setItem("skinId", skinId); });
   populateSkinSelect();
 
   let COLS, ROWS, CELL;
-
   function applyMapSize() {
     const m = MAPS[mapSize] || MAPS.medium;
-    COLS = m.cols;
-    ROWS = m.rows;
-    CELL = m.cell;
+    COLS = m.cols; ROWS = m.rows; CELL = m.cell;
     canvas.width = COLS * CELL + WALL * 2;
     canvas.height = ROWS * CELL + WALL * 2;
     const w = canvas.width + "px";
     scoreboard.style.width = w;
     controlsBar.style.width = w;
   }
-
   mapSelect.value = mapSize;
-  mapSelect.addEventListener("change", () => {
-    mapSize = mapSelect.value;
-    localStorage.setItem("mapSize", mapSize);
-    applyMapSize();
-    if (gameStarted) resetGame();
-  });
-
+  mapSelect.addEventListener("change", () => { mapSize = mapSelect.value; localStorage.setItem("mapSize", mapSize); applyMapSize(); if (gameStarted) resetGame(); });
   applyMapSize();
 
   function makeSound(src) {
     let audio = null, broken = false;
-    try { audio = new Audio(src); audio.volume = 0.5; }
-    catch (e) { broken = true; }
-    return {
-      play() {
-        if (broken || !audio || sfxMuted) return;
-        try {
-          audio.currentTime = 0;
-          const p = audio.play();
-          if (p && typeof p.catch === "function") p.catch(() => {});
-        } catch (e) {}
-      }
-    };
+    try { audio = new Audio(src); audio.volume = 0.5; } catch (e) { broken = true; }
+    return { play() { if (broken || !audio || sfxMuted) return; try { audio.currentTime = 0; const p = audio.play(); if (p && typeof p.catch === "function") p.catch(() => {}); } catch (e) {} } };
   }
-
   const eatSound = makeSound("sounds/eat.mp3");
   const gameOverSound = makeSound("sounds/gameover.mp3");
   const winSound = makeSound("sounds/win.mp3");
 
   let sfxMuted = false;
-  muteBtn.addEventListener("click", () => {
-    sfxMuted = !sfxMuted;
-    muteBtn.textContent = sfxMuted ? "🔇 SFX" : "🔊 SFX";
-  });
+  muteBtn.addEventListener("click", () => { sfxMuted = !sfxMuted; muteBtn.textContent = sfxMuted ? "🔇 SFX" : "🔊 SFX"; });
 
   let bgm = null;
   try {
     bgm = new Audio("sounds/bgm.mp3");
     bgm.loop = true;
     bgm.volume = musicVolume / 100;
-    bgm.addEventListener("ended", () => {
-      if (musicOn) {
-        bgm.currentTime = 0;
-        tryPlayMusic();
-      }
-    });
+    bgm.addEventListener("ended", () => { if (musicOn) { bgm.currentTime = 0; tryPlayMusic(); } });
   } catch (e) { bgm = null; }
 
-  function updateMusicBtn() {
-    musicBtn.textContent = musicOn ? "🎵 Music" : "🔈 Music";
-  }
-
-  function tryPlayMusic() {
-    if (!bgm || !musicOn) return;
-    const p = bgm.play();
-    if (p && typeof p.catch === "function") p.catch(() => {});
-  }
-
-  musicBtn.addEventListener("click", () => {
-    musicOn = !musicOn;
-    localStorage.setItem("musicOn", String(musicOn));
-    updateMusicBtn();
-    if (musicOn) tryPlayMusic();
-    else if (bgm) bgm.pause();
-  });
+  function updateMusicBtn() { musicBtn.textContent = musicOn ? "🎵 Music" : "🔈 Music"; }
+  function tryPlayMusic() { if (!bgm || !musicOn) return; const p = bgm.play(); if (p && typeof p.catch === "function") p.catch(() => {}); }
+  musicBtn.addEventListener("click", () => { musicOn = !musicOn; localStorage.setItem("musicOn", String(musicOn)); updateMusicBtn(); if (musicOn) tryPlayMusic(); else if (bgm) bgm.pause(); });
 
   musicVol.value = musicVolume;
-  musicVol.addEventListener("input", () => {
-    musicVolume = parseInt(musicVol.value, 10);
-    localStorage.setItem("musicVol", String(musicVolume));
-    if (bgm) bgm.volume = musicVolume / 100;
-  });
-
+  musicVol.addEventListener("input", () => { musicVolume = parseInt(musicVol.value, 10); localStorage.setItem("musicVol", String(musicVolume)); if (bgm) bgm.volume = musicVolume / 100; });
   updateMusicBtn();
   window.addEventListener("keydown", tryPlayMusic, { once: true });
   window.addEventListener("pointerdown", tryPlayMusic, { once: true });
@@ -684,94 +616,75 @@
   let dir = { x: 1, y: 0 };
   let nextDir = { x: 1, y: 0 };
   let inputQueue = [];
-
   let food = { x: 0, y: 0, fruit: FRUITS[0] };
 
-  let isGameOver = false;
-  let isWin = false;
-  let isPaused = false;
-  let isCd = false;
-  let cdVal = COUNTDOWN_START;
-  let cdTimer = null;
-
+  let isGameOver = false, isWin = false, isPaused = false, isCd = false, detectedHacker = false;
+  let cdVal = CD0, cdTimer = null;
   let progress = 0;
   let speed = parseFloat(speedSelect.value);
-
   let particles = [];
-  let animationId = null;
-  let lastTime = null;
+  let animationId = null, lastTime = null;
+  let comboCount = 0, comboTimer = 0, scoreSubmitted = false;
 
-  let comboCount = 0;
-  let comboTimer = 0;
-  let scoreSubmitted = false;
+  // ---- Upgrade #2: in-memory integrity tracking ----
+  // shadowScore/fruitsEaten are the ONLY place score is allowed to increase.
+  // Every frame we check the visible `score` still equals what the game loop
+  // actually earned; if a console/cheat-tool edit pokes `score` directly
+  // (or bumps it without an eat event), this trips instantly.
+  let shadowScore = 0;
+  let fruitsEaten = 0;
 
-  function difficultyLabel() {
-    return speedSelect.options[speedSelect.selectedIndex].text;
-  }
+  function difficultyLabel() { return speedSelect.options[speedSelect.selectedIndex].text; }
 
   function submitScoreIfNeeded() {
     if (scoreSubmitted) return;
     scoreSubmitted = true;
-    if (score <= 0) return; // don't clutter the leaderboard with 0-score runs
-    const name = playerName || "Player";
-    submitScoreToCloud(name, score, mapSize, difficultyLabel());
+    if (detectedHacker) return; // never submit a run that failed integrity checks
+    if (score <= 0) return;
+    submitScoreToCloud(playerName || "Player", score, mapSize, difficultyLabel());
+  }
+
+  function triggerHackerDetected() {
+    if (detectedHacker) return;
+    detectedHacker = true;
+    isGameOver = true;
+    flagSuspiciousClient("in_memory_mismatch");
+    gameOverSound.play();
+    submitScoreIfNeeded();
+    draw();
+  }
+
+  // Called once per frame: cheap, cheap, cheap.
+  function checkIntegrity() {
+    if (score !== shadowScore) triggerHackerDetected();
   }
 
   window.addEventListener("keydown", (e) => {
-    if (isModalOpen()) return; // let the user type freely in the name field
-
+    if (isModalOpen()) return;
     const k = e.key.toLowerCase();
-
-    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) {
-      e.preventDefault();
-    }
+    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     if (e.repeat) return;
-
     if (!isPaused && !isCd && !isGameOver && !isWin) {
       if (k === "arrowup" || k === "w") queueDir(0, -1);
       else if (k === "arrowdown" || k === "s") queueDir(0, 1);
       else if (k === "arrowleft" || k === "a") queueDir(-1, 0);
       else if (k === "arrowright" || k === "d") queueDir(1, 0);
     }
-
     if (k === " " && (isGameOver || isWin)) resetGame();
-
-    if (k === "p" && !isGameOver && !isWin) {
-      if (isCd) return;
-      isPaused ? startCountdown() : pauseGame();
-    }
+    if (k === "p" && !isGameOver && !isWin) { if (isCd) return; isPaused ? startCountdown() : pauseGame(); }
   });
 
-  function queueDir(x, y) {
-    if (inputQueue.length < 2) inputQueue.push({ x, y });
-  }
-
-  function pauseGame() {
-    isPaused = true;
-    draw();
-  }
-
-  pauseBtn.addEventListener("click", () => {
-    if (isGameOver || isWin || isCd) return;
-    isPaused ? startCountdown() : pauseGame();
-  });
-
-  speedSelect.addEventListener("change", () => {
-    speed = parseFloat(speedSelect.value);
-  });
+  function queueDir(x, y) { if (inputQueue.length < 2) inputQueue.push({ x, y }); }
+  function pauseGame() { isPaused = true; draw(); }
+  pauseBtn.addEventListener("click", () => { if (isGameOver || isWin || isCd) return; isPaused ? startCountdown() : pauseGame(); });
+  speedSelect.addEventListener("change", () => { speed = parseFloat(speedSelect.value); });
 
   let touchStartX = 0, touchStartY = 0;
-  canvas.addEventListener("touchstart", (e) => {
-    const t = e.changedTouches[0];
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
-  }, { passive: true });
-
+  canvas.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touchStartX = t.clientX; touchStartY = t.clientY; }, { passive: true });
   canvas.addEventListener("touchend", (e) => {
     if (isPaused || isCd || isGameOver || isWin) return;
     const t = e.changedTouches[0];
-    const dx = t.clientX - touchStartX;
-    const dy = t.clientY - touchStartY;
+    const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
     if (Math.abs(dx) > Math.abs(dy)) queueDir(dx > 0 ? 1 : -1, 0);
     else queueDir(0, dy > 0 ? 1 : -1);
@@ -779,57 +692,29 @@
 
   function startCountdown() {
     if (cdTimer) clearInterval(cdTimer);
-    isPaused = false;
-    isCd = true;
-    cdVal = COUNTDOWN_START;
+    isPaused = false; isCd = true; cdVal = CD0;
     draw();
-
     cdTimer = setInterval(() => {
-      cdVal--;
-      draw();
-      if (cdVal <= 0) {
-        clearInterval(cdTimer);
-        cdTimer = null;
-        isCd = false;
-        lastTime = null;
-        animationId = requestAnimationFrame(loop);
-      }
+      cdVal--; draw();
+      if (cdVal <= 0) { clearInterval(cdTimer); cdTimer = null; isCd = false; lastTime = null; animationId = requestAnimationFrame(loop); }
     }, 1000);
   }
 
   function explode(gx, gy, color) {
-    const px = gx * CELL + CELL / 2 + WALL;
-    const py = gy * CELL + CELL / 2 + WALL;
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const s = Math.random() * 3 + 2;
-      particles.push({
-        x: px, y: py,
-        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-        r: Math.random() * 3 + 2, alpha: 1,
-        dec: Math.random() * 0.03 + 0.02,
-        color: color || "255,235,59"
-      });
+    const px = gx * CELL + CELL / 2 + WALL, py = gy * CELL + CELL / 2 + WALL;
+    for (let i = 0; i < PCOUNT; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * 3 + 2;
+      particles.push({ x: px, y: py, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: Math.random() * 3 + 2, alpha: 1, dec: Math.random() * 0.03 + 0.02, color: color || "255,235,59" });
     }
   }
 
   function spawnFood() {
     const spots = [];
     const occupied = new Set(snake.map(c => c.x + "," + c.y));
-    for (let x = 0; x < COLS; x++) {
-      for (let y = 0; y < ROWS; y++) {
-        if (!occupied.has(x + "," + y)) spots.push({ x, y });
-      }
-    }
-    if (spots.length === 0) {
-      isWin = true;
-      winSound.play();
-      submitScoreIfNeeded();
-      return;
-    }
+    for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) if (!occupied.has(x + "," + y)) spots.push({ x, y });
+    if (spots.length === 0) { isWin = true; winSound.play(); submitScoreIfNeeded(); return; }
     const pick = spots[Math.floor(Math.random() * spots.length)];
-    food.x = pick.x;
-    food.y = pick.y;
+    food.x = pick.x; food.y = pick.y;
     food.fruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
   }
 
@@ -837,33 +722,19 @@
     if (animationId) cancelAnimationFrame(animationId);
     if (cdTimer) clearInterval(cdTimer);
 
-    score = 0;
+    score = 0; shadowScore = 0; fruitsEaten = 0;
     scoreEl.textContent = score;
-    comboCount = 0;
-    comboTimer = 0;
-    comboEl.textContent = "";
-    scoreSubmitted = false;
+    comboCount = 0; comboTimer = 0; comboEl.textContent = "";
+    scoreSubmitted = false; detectedHacker = false;
 
-    particles = [];
-    inputQueue = [];
+    particles = []; inputQueue = [];
 
     const midY = Math.floor(ROWS / 2);
-    snake = [
-      { x: 6, y: midY },
-      { x: 5, y: midY },
-      { x: 4, y: midY },
-      { x: 3, y: midY }
-    ];
+    snake = [{ x: 6, y: midY }, { x: 5, y: midY }, { x: 4, y: midY }, { x: 3, y: midY }];
 
-    dir = { x: 1, y: 0 };
-    nextDir = { x: 1, y: 0 };
-    progress = 0;
-    lastTime = null;
-
-    isGameOver = false;
-    isWin = false;
-    isPaused = false;
-    isCd = false;
+    dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
+    progress = 0; lastTime = null;
+    isGameOver = false; isWin = false; isPaused = false; isCd = false;
 
     spawnFood();
     animationId = requestAnimationFrame(loop);
@@ -877,65 +748,42 @@
     nextDir = wanted;
   }
 
-  function hitsSnake(x, y, length) {
-    for (let i = 0; i < length; i++) {
-      if (snake[i].x === x && snake[i].y === y) return true;
-    }
-    return false;
-  }
+  function hitsSnake(x, y, length) { for (let i = 0; i < length; i++) if (snake[i].x === x && snake[i].y === y) return true; return false; }
 
-  function endGame() {
-    isGameOver = true;
-    gameOverSound.play();
-    progress = 1;
-    submitScoreIfNeeded();
-  }
-
-  function hexToRgb(hex) {
-    const n = parseInt(hex.replace("#", ""), 16);
-    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
-  }
+  function endGame() { isGameOver = true; gameOverSound.play(); progress = 1; submitScoreIfNeeded(); }
+  function hexToRgb(hex) { const n = parseInt(hex.replace("#", ""), 16); return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`; }
 
   function advanceGridStep() {
     updateDirection();
     dir = nextDir;
-
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-      endGame();
-      return;
-    }
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { endGame(); return; }
 
     const eating = head.x === food.x && head.y === food.y;
     const checkLength = eating ? snake.length : snake.length - 1;
-
-    if (hitsSnake(head.x, head.y, checkLength)) {
-      endGame();
-      return;
-    }
+    if (hitsSnake(head.x, head.y, checkLength)) { endGame(); return; }
 
     snake.unshift(head);
 
     if (eating) {
       eatSound.play();
+      fruitsEaten++;
 
-      if (comboTimer > 0) comboCount++;
-      else comboCount = 1;
-      comboTimer = COMBO_WINDOW_MS;
+      if (comboTimer > 0) comboCount++; else comboCount = 1;
+      comboTimer = COMBO_MS;
 
       const gained = 1 + Math.max(0, comboCount - 1);
-      score += gained;
+
+      // Upgrade #2: shadowScore is the single source of truth for what the
+      // player actually earned this frame. `score` is only ever set FROM it.
+      shadowScore += gained;
+      score = shadowScore;
       scoreEl.textContent = score;
 
       explode(food.x, food.y, hexToRgb(food.fruit.glow));
 
-      if (score > highScore) {
-        highScore = score;
-        localStorage.setItem("hHigh", String(highScore));
-        highScoreEl.textContent = highScore;
-        populateSkinSelect();
-      }
+      if (score > highScore) { highScore = score; localStorage.setItem("hHigh", String(highScore)); highScoreEl.textContent = highScore; populateSkinSelect(); }
 
       spawnFood();
     } else {
@@ -944,10 +792,7 @@
   }
 
   function loop(timestamp) {
-    if (isGameOver || isWin || isPaused || isCd) {
-      draw();
-      return;
-    }
+    if (isGameOver || isWin || isPaused || isCd) { draw(); return; }
 
     if (lastTime === null) lastTime = timestamp;
     let dt = timestamp - lastTime;
@@ -965,10 +810,12 @@
       if (isGameOver || isWin) break;
     }
 
-    if (comboTimer > 0) {
-      comboTimer -= dt;
-      if (comboTimer <= 0) { comboTimer = 0; comboCount = 0; }
-    }
+    // Upgrade #2: integrity check every frame. Any external tampering with
+    // `score` that doesn't go through the eat-fruit path above is caught here.
+    checkIntegrity();
+    if (detectedHacker) return;
+
+    if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) { comboTimer = 0; comboCount = 0; } }
     comboEl.textContent = comboCount > 1 ? `x${comboCount} combo!` : "";
 
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -986,84 +833,51 @@
     ctx.save();
     ctx.translate(WALL, WALL);
 
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r < ROWS; r++) {
-        ctx.fillStyle = (c + r) % 2 === 0 ? "#aad751" : "#4a752c";
-        ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
-      }
-    }
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) { ctx.fillStyle = (c + r) % 2 === 0 ? "#aad751" : "#4a752c"; ctx.fillRect(c * CELL, r * CELL, CELL, CELL); }
 
     if (!isWin) {
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = food.fruit.glow;
-      ctx.font = "24px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      ctx.shadowBlur = 20; ctx.shadowColor = food.fruit.glow;
+      ctx.font = "24px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(food.fruit.emoji, food.x * CELL + CELL / 2, food.y * CELL + CELL / 2 + 2);
       ctx.shadowBlur = 0;
     }
 
     if (snake.length > 0) {
       const skin = currentSkin();
-      ctx.strokeStyle = skin.body;
-      ctx.lineWidth = CELL - 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+      ctx.strokeStyle = skin.body; ctx.lineWidth = CELL - 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
 
       const p = (isGameOver || isWin) ? 1 : progress;
-      const first = snake[0];
-      const second = snake[1] || first;
-
+      const first = snake[0], second = snake[1] || first;
       const startX = (second.x + (first.x - second.x) * p) * CELL + CELL / 2;
       const startY = (second.y + (first.y - second.y) * p) * CELL + CELL / 2;
       ctx.moveTo(startX, startY);
 
       for (let i = 1; i < snake.length; i++) {
-        const current = snake[i];
-        const prev = snake[i - 1];
+        const current = snake[i], prev = snake[i - 1];
         let x, y;
-        if (i === snake.length - 1) {
-          x = (current.x + (prev.x - current.x) * p) * CELL + CELL / 2;
-          y = (current.y + (prev.y - current.y) * p) * CELL + CELL / 2;
-        } else {
-          x = current.x * CELL + CELL / 2;
-          y = current.y * CELL + CELL / 2;
-        }
+        if (i === snake.length - 1) { x = (current.x + (prev.x - current.x) * p) * CELL + CELL / 2; y = (current.y + (prev.y - current.y) * p) * CELL + CELL / 2; }
+        else { x = current.x * CELL + CELL / 2; y = current.y * CELL + CELL / 2; }
         ctx.lineTo(x, y);
       }
       ctx.stroke();
 
       ctx.fillStyle = skin.eye;
       ctx.beginPath();
-      if (dir.x === 1) {
-        ctx.arc(startX + 8, startY - 7, 3, 0, Math.PI * 2);
-        ctx.arc(startX + 8, startY + 7, 3, 0, Math.PI * 2);
-      } else if (dir.x === -1) {
-        ctx.arc(startX - 8, startY - 7, 3, 0, Math.PI * 2);
-        ctx.arc(startX - 8, startY + 7, 3, 0, Math.PI * 2);
-      } else if (dir.y === 1) {
-        ctx.arc(startX - 7, startY + 8, 3, 0, Math.PI * 2);
-        ctx.arc(startX + 7, startY + 8, 3, 0, Math.PI * 2);
-      } else if (dir.y === -1) {
-        ctx.arc(startX - 7, startY - 8, 3, 0, Math.PI * 2);
-        ctx.arc(startX + 7, startY - 8, 3, 0, Math.PI * 2);
-      }
+      if (dir.x === 1) { ctx.arc(startX + 8, startY - 7, 3, 0, Math.PI * 2); ctx.arc(startX + 8, startY + 7, 3, 0, Math.PI * 2); }
+      else if (dir.x === -1) { ctx.arc(startX - 8, startY - 7, 3, 0, Math.PI * 2); ctx.arc(startX - 8, startY + 7, 3, 0, Math.PI * 2); }
+      else if (dir.y === 1) { ctx.arc(startX - 7, startY + 8, 3, 0, Math.PI * 2); ctx.arc(startX + 7, startY + 8, 3, 0, Math.PI * 2); }
+      else if (dir.y === -1) { ctx.arc(startX - 7, startY - 8, 3, 0, Math.PI * 2); ctx.arc(startX + 7, startY - 8, 3, 0, Math.PI * 2); }
       ctx.fill();
     }
 
     ctx.restore();
 
-    for (const p of particles) {
-      ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    for (const p of particles) { ctx.fillStyle = `rgba(${p.color},${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
 
     ctx.shadowBlur = 15;
-    ctx.shadowColor = isWin ? "#3fb950" : "#ff0000";
-    ctx.strokeStyle = isWin ? "#3fb950" : "#ff0000";
+    ctx.shadowColor = detectedHacker ? "#ff0000" : (isWin ? "#3fb950" : "#ff0000");
+    ctx.strokeStyle = ctx.shadowColor;
     ctx.lineWidth = WALL;
     ctx.strokeRect(WALL / 2, WALL / 2, canvas.width - WALL, canvas.height - WALL);
     ctx.shadowBlur = 0;
@@ -1073,46 +887,36 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.textAlign = "center";
 
-      if (isPaused) {
+      if (isPaused) { ctx.fillStyle = "#ffffff"; ctx.font = "bold 36px sans-serif"; ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2); }
+      if (isCd) { ctx.fillStyle = "#ffda6a"; ctx.font = "bold 64px sans-serif"; ctx.fillText(cdVal, canvas.width / 2, canvas.height / 2); }
+
+      if (isGameOver && detectedHacker) {
+        // Upgrade #2: dedicated hacker-detected overlay, distinct from a normal game over.
+        ctx.fillStyle = "#ff1744";
+        ctx.font = "bold 40px sans-serif";
+        ctx.fillText("⚠ HACKER DETECTED ⚠", canvas.width / 2, canvas.height / 2 - 20);
         ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 36px sans-serif";
-        ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+        ctx.font = "14px sans-serif";
+        ctx.fillText("Score integrity check failed — run discarded", canvas.width / 2, canvas.height / 2 + 12);
+        ctx.font = "13px sans-serif";
+        ctx.fillStyle = "#8b949e";
+        ctx.fillText("PRESS SPACEBAR TO RESTART", canvas.width / 2, canvas.height / 2 + 38);
+      } else if (isGameOver) {
+        ctx.fillStyle = "#ff0000"; ctx.font = "bold 42px sans-serif"; ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 15);
+        ctx.fillStyle = "#ffffff"; ctx.font = "16px sans-serif"; ctx.fillText("PRESS SPACEBAR TO RESTART", canvas.width / 2, canvas.height / 2 + 25);
       }
-      if (isCd) {
-        ctx.fillStyle = "#ffda6a";
-        ctx.font = "bold 64px sans-serif";
-        ctx.fillText(cdVal, canvas.width / 2, canvas.height / 2);
-      }
-      if (isGameOver) {
-        ctx.fillStyle = "#ff0000";
-        ctx.font = "bold 42px sans-serif";
-        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 15);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "16px sans-serif";
-        ctx.fillText("PRESS SPACEBAR TO RESTART", canvas.width / 2, canvas.height / 2 + 25);
-      }
+
       if (isWin) {
-        ctx.fillStyle = "#3fb950";
-        ctx.font = "bold 42px sans-serif";
-        ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2 - 25);
-        ctx.fillStyle = "#ffda6a";
-        ctx.font = "bold 20px sans-serif";
-        ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "16px sans-serif";
-        ctx.fillText("PRESS SPACEBAR TO RESTART", canvas.width / 2, canvas.height / 2 + 40);
+        ctx.fillStyle = "#3fb950"; ctx.font = "bold 42px sans-serif"; ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2 - 25);
+        ctx.fillStyle = "#ffda6a"; ctx.font = "bold 20px sans-serif"; ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+        ctx.fillStyle = "#ffffff"; ctx.font = "16px sans-serif"; ctx.fillText("PRESS SPACEBAR TO RESTART", canvas.width / 2, canvas.height / 2 + 40);
       }
     }
   }
 
   // ================= Boot =================
-  if (playerName) {
-    gameStarted = true;
-    resetGame();
-  } else {
-    draw(); // draw an empty board behind the modal
-    showNameModal();
-  }
+  if (playerName) { gameStarted = true; resetGame(); }
+  else { draw(); showNameModal(); }
 </script>
 
 </body>
