@@ -213,7 +213,7 @@
 
   .lb-error{ color:#ff6b6b; }
 
-  /* ---------- Username modal ---------- */
+  /* ---------- Modals (shared look) ---------- */
   .modal-overlay{
     position:fixed;
     inset:0;
@@ -272,11 +272,204 @@
   .modal-box button:hover{
     background:#2ea043;
   }
+
+  .name-error{
+    display:none;
+    color:#ff6b6b;
+    font-size:12px;
+    text-align:left;
+    margin:-6px 0 12px;
+  }
+
+  .name-error.visible{
+    display:block;
+  }
+
+  /* ---------- Shop ---------- */
+  .shop-box{
+    width:420px;
+    text-align:left;
+  }
+
+  .shop-box h3{
+    text-align:center;
+  }
+
+  .shop-box > p{
+    text-align:center;
+  }
+
+  .shop-tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:12px;
+  }
+
+  .shop-tab{
+    flex:1;
+    background:#0d1117;
+    border:1px solid #30363d;
+    color:#8b949e;
+    padding:8px 0;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:12px;
+    font-weight:bold;
+  }
+
+  .shop-tab:hover{
+    filter:brightness(1.2);
+  }
+
+  .shop-tab.active{
+    background:#238636;
+    color:#fff;
+    border-color:#238636;
+  }
+
+  .shop-list{
+    max-height:320px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:14px;
+    padding-right:2px;
+  }
+
+  .shop-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:#0d1117;
+    border:1px solid #21262d;
+    border-radius:8px;
+    padding:8px 10px;
+  }
+
+  .shop-item.locked{
+    opacity:.55;
+  }
+
+  .shop-item.achievement{
+    border-color:#ffd700;
+    background:linear-gradient(90deg, rgba(255,215,0,.08), rgba(13,17,23,0));
+  }
+
+  .shop-badge{
+    display:inline-block;
+    background:#ffd700;
+    color:#3e2f00;
+    font-size:9px;
+    font-weight:bold;
+    letter-spacing:.5px;
+    padding:2px 6px;
+    border-radius:4px;
+    margin-left:6px;
+    vertical-align:middle;
+  }
+
+  .shop-swatch{
+    width:36px;
+    height:36px;
+    min-width:36px;
+    border-radius:8px;
+    border:2px solid #30363d;
+  }
+
+  .shop-item .shop-buy-btn{
+    width:auto;
+    flex-shrink:0;
+    padding:7px 12px;
+    border-radius:6px;
+    border:none;
+    font-size:11px;
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+
+  .shop-item .shop-buy-btn.equip{
+    background:#238636;
+    color:#fff;
+  }
+
+  .shop-item .shop-buy-btn.equip:hover{
+    background:#2ea043;
+  }
+
+  .shop-item .shop-buy-btn.equipped{
+    background:#30363d;
+    color:#8b949e;
+    cursor:default;
+  }
+
+  .shop-item .shop-buy-btn.locked{
+    background:#21262d;
+    color:#484f58;
+    cursor:not-allowed;
+  }
+
+  .shop-info{
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+  }
+
+  .shop-name{
+    font-size:13px;
+    font-weight:bold;
+    color:#e6edf3;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .shop-req{
+    font-size:11px;
+    color:#8b949e;
+  }
+
+  .shop-close-btn{
+    background:#30363d !important;
+  }
+
+  .shop-close-btn:hover{
+    background:#3d444d !important;
+  }  .reset-game-fab{
+    position:fixed;
+    top:20px;
+    right:20px;
+    background:#8b1a1a;
+    color:#fff;
+    border:1px solid #ff6b6b;
+    border-radius:8px;
+    padding:10px 14px;
+    font-size:12px;
+    font-weight:bold;
+    cursor:pointer;
+    z-index:40;
+    box-shadow:0 0 12px rgba(255,0,0,.35);
+  }
+
+  .reset-game-fab:hover{
+    background:#a52222;
+  }
+
+  @media (max-width: 820px){
+    .reset-game-fab{
+      position:static;
+      display:block;
+      margin:0 auto 16px;
+    }
+  }
 </style>
 
 </head>
 
 <body>
+
+<button id="resetGameBtn" class="reset-game-fab" title="Remove your own score from the leaderboard and start over as a brand-new player">🔄 Reset Game</button>
 
 <div id="scoreboard">
   <div style="color:#ffda6a;">🍎 <span id="score">0</span></div>
@@ -300,7 +493,7 @@
     <option value="large">Large map</option>
   </select>
 
-  <select id="skinSelect"></select>
+  <button id="shopBtn">🛒 Shop</button>
 
   <select id="speedSelect">
     <option value="0.10">Easy</option>
@@ -340,7 +533,23 @@
     <h3>Welcome, arcade player!</h3>
     <p>Enter a username (max 10 characters) to appear on the global leaderboard.</p>
     <input id="nameInput" maxlength="10" placeholder="e.g. Husnain" autocomplete="off">
+    <div id="nameError" class="name-error"></div>
     <button id="nameSubmitBtn">Let's go</button>
+  </div>
+</div>
+
+<!-- Shop modal -->
+<div class="modal-overlay" id="shopModal">
+  <div class="modal-box shop-box">
+    <h3>🛒 Shop</h3>
+    <p>Reach the score shown to unlock it — bigger maps and combo chains needed for the top tiers. Nothing is ever spent, just equip what you've earned.</p>
+    <div class="shop-tabs">
+      <button class="shop-tab active" data-cat="skins">🐍 Skins</button>
+      <button class="shop-tab" data-cat="grid">🟩 Grid</button>
+      <button class="shop-tab" data-cat="boundary">💡 Boundary</button>
+    </div>
+    <div class="shop-list" id="shopList"></div>
+    <button id="shopCloseBtn" class="shop-close-btn">Close</button>
   </div>
 </div>
 
@@ -373,13 +582,21 @@
    if they ever drift apart, the client and server will disagree and either
    reject legit scores or let cheated ones through. Consider also adding a
    Cloud Function with App Check to rate-limit writes per player.
+
+   NOTE ON THE SHOP: everything in the shop (skins / grid colors / boundary
+   colors, and which ones are unlocked/equipped) lives ONLY in this browser's
+   localStorage. It never touches Firestore. The global leaderboard collection
+   is completely separate shared data — a new player on a fresh browser starts
+   with their own empty shop progress, but still sees every existing score
+   (e.g. "Husnain — 500") in the leaderboard untouched, since that's server-side
+   data nobody's local shop activity can affect.
    ============================================================================ */
 
   // ================= Firebase setup =================
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import {
-    getFirestore, collection, doc, setDoc, getDoc, serverTimestamp,
-    query, orderBy, limit, onSnapshot
+    getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp,
+    query, where, orderBy, limit, onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -396,7 +613,7 @@
   try { const _a = initializeApp(firebaseConfig); db = getFirestore(_a); }
   catch (e) { console.warn("Firebase failed to initialize — leaderboard will be unavailable.", e); }
 
-  // Upgrade #1: dynamic grid-limit table. Cells = cols*rows; caps below are the
+  // Dynamic grid-limit table. Cells = cols*rows; caps below are the
   // designer-supplied theoretical max score for a perfect run on each map.
   const MAP_GRIDS = { small: { cols: 16, rows: 11 }, medium: { cols: 22, rows: 15 }, large: { cols: 28, rows: 19 } };
   const MAP_SCORE_CAPS = { small: 400, medium: 700, large: 1200 };
@@ -412,7 +629,7 @@
   async function submitScoreToCloud(name, score, mapSize, difficulty) {
     if (!db) return;
 
-    // --- Upgrade #1: reject anything above the physical/theoretical max for the map ---
+    // reject anything above the physical/theoretical max for the map
     const cap = MAP_SCORE_CAPS[mapSize] ?? 0;
     if (!Number.isFinite(score) || score < 0 || score > cap) {
       console.warn(`[anti-cheat] rejected submission — score ${score} exceeds cap ${cap} for map "${mapSize}" (${gridCells(mapSize)} cells). Flagged as hacker.`, { name, score, mapSize, difficulty });
@@ -426,8 +643,25 @@
       const existing = await getDoc(ref);
       const prevBest = existing.exists() ? (existing.data().score || 0) : -1;
       if (score <= prevBest) return;
-      await setDoc(ref, { name, score, mapSize, difficulty, timestamp: serverTimestamp() });
+      await setDoc(ref, { name, nameLower: name.toLowerCase(), score, mapSize, difficulty, timestamp: serverTimestamp() });
     } catch (e) { console.warn("Could not submit score to leaderboard:", e); }
+  }
+
+  // Checks the global leaderboard for another player already using this name
+  // (case-insensitive). Your own existing entry doesn't count as a collision —
+  // renaming yourself back to your current name should always be allowed.
+  // If Firestore isn't reachable we fail OPEN (allow the name) rather than lock
+  // someone out of playing just because the name check couldn't run.
+  async function isNameTaken(name) {
+    if (!db) return false;
+    try {
+      const myPid = getPlayerId();
+      const q = query(collection(db, "leaderboard"), where("nameLower", "==", name.toLowerCase()));
+      const snap = await getDocs(q);
+      let taken = false;
+      snap.forEach(d => { if (d.id !== myPid) taken = true; });
+      return taken;
+    } catch (e) { console.warn("Name uniqueness check failed:", e); return false; }
   }
 
   // Lightweight local flag so repeated cap violations are visible in devtools/analytics
@@ -439,6 +673,26 @@
       localStorage.setItem("lastFlagReason", reason);
     } catch (e) {}
   }
+
+  // "Reset Game" button (outside the game area). Removes ONLY this player's own row
+  // from the global leaderboard (their playerId doc) — everyone else's scores are
+  // untouched — then wipes all local progress (high score, shop unlocks, name,
+  // player identity) and reloads so they start over exactly like a brand-new player.
+  const resetGameBtn = document.getElementById("resetGameBtn");
+  resetGameBtn.addEventListener("click", async () => {
+    const ok = confirm("This permanently removes YOUR score from the global leaderboard and resets all your progress (high score, unlocked skins/colors, your name) back to a fresh new player. This can't be undone. Continue?");
+    if (!ok) return;
+    resetGameBtn.disabled = true;
+    resetGameBtn.textContent = "Resetting…";
+    try {
+      if (db) {
+        const pid = getPlayerId();
+        await deleteDoc(doc(db, "leaderboard", pid));
+      }
+    } catch (e) { console.warn("Could not remove leaderboard entry:", e); }
+    ["hHigh", "skinId", "gridThemeId", "boundaryThemeId", "playerName", "playerId", "mapSize", "musicOn", "musicVol", "flagCount", "lastFlagReason", "mapsWon"].forEach(k => localStorage.removeItem(k));
+    location.reload();
+  });
 
   const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -479,21 +733,72 @@
   }
   startLeaderboardListener();
 
-  // ================= Username modal =================
+  // ================= Username modal + Shop modal (shared plumbing) =================
   const nameModal = document.getElementById("nameModal");
   const nameInput = document.getElementById("nameInput");
   const nameSubmitBtn = document.getElementById("nameSubmitBtn");
   const nameBtn = document.getElementById("nameBtn");
+  const nameErrorEl = document.getElementById("nameError");
+
+  const shopModal = document.getElementById("shopModal");
+  const shopBtn = document.getElementById("shopBtn");
+  const shopCloseBtn = document.getElementById("shopCloseBtn");
+  const shopListEl = document.getElementById("shopList");
+  const shopTabButtons = document.querySelectorAll(".shop-tab");
 
   let playerName = localStorage.getItem("playerName") || "";
   let gameStarted = false;
+  let wasRunningBeforeModal = false;
+  let shopCategory = "skins";
 
-  function isModalOpen() { return nameModal.style.display === "flex"; }
-  function showNameModal() { nameInput.value = playerName; nameModal.style.display = "flex"; setTimeout(() => nameInput.focus(), 0); }
-  function hideNameModal() { nameModal.style.display = "none"; }
-  function confirmName() {
+  function isModalOpen() { return nameModal.style.display === "flex" || shopModal.style.display === "flex"; }
+
+  // Any modal (name or shop) pauses a live run while it's open, and resumes
+  // via the countdown once closed — same behavior for both.
+  function pauseForModal() {
+    wasRunningBeforeModal = gameStarted && !isPaused && !isGameOver && !isWin && !isCd;
+    if (wasRunningBeforeModal) pauseGame();
+  }
+  function resumeAfterModal() {
+    if (wasRunningBeforeModal) { wasRunningBeforeModal = false; startCountdown(); }
+  }
+
+  function showNameModal() {
+    pauseForModal();
+    nameInput.value = playerName; nameErrorEl.classList.remove("visible"); nameModal.style.display = "flex"; setTimeout(() => nameInput.focus(), 0);
+  }
+  function hideNameModal() {
+    nameModal.style.display = "none";
+    resumeAfterModal();
+  }
+  function setNameError(msg) {
+    nameErrorEl.textContent = msg;
+    nameErrorEl.classList.toggle("visible", !!msg);
+  }
+  nameInput.addEventListener("input", () => setNameError(""));
+
+  async function confirmName() {
     const val = nameInput.value.trim().slice(0, 10);
     if (!val) return;
+
+    nameSubmitBtn.disabled = true;
+    nameSubmitBtn.textContent = "Checking name…";
+    setNameError("");
+
+    // Same name (case-insensitive) as your CURRENT name is always fine — this isn't
+    // a collision, you're just confirming who you already are.
+    const isUnchanged = playerName && val.toLowerCase() === playerName.toLowerCase();
+    const taken = isUnchanged ? false : await isNameTaken(val);
+
+    nameSubmitBtn.disabled = false;
+    nameSubmitBtn.textContent = "Let's go";
+
+    if (taken) {
+      setNameError(`"${val}" is already taken by another player — please choose a different name.`);
+      nameInput.focus();
+      return;
+    }
+
     playerName = val;
     localStorage.setItem("playerName", playerName);
     hideNameModal();
@@ -502,6 +807,25 @@
   nameSubmitBtn.addEventListener("click", confirmName);
   nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") confirmName(); });
   nameBtn.addEventListener("click", showNameModal);
+
+  function openShop() {
+    pauseForModal();
+    shopModal.style.display = "flex";
+    renderShop();
+  }
+  function closeShop() {
+    shopModal.style.display = "none";
+    resumeAfterModal();
+  }
+  shopBtn.addEventListener("click", openShop);
+  shopCloseBtn.addEventListener("click", closeShop);
+  shopTabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      shopCategory = btn.dataset.cat;
+      shopTabButtons.forEach(b => b.classList.toggle("active", b === btn));
+      renderShop();
+    });
+  });
 
   // ================= Game (core logic preserved, internals compacted) =================
   const canvas = document.getElementById("gameCanvas");
@@ -514,14 +838,17 @@
   const comboEl = document.getElementById("combo");
 
   const mapSelect = document.getElementById("mapSelect");
-  const skinSelect = document.getElementById("skinSelect");
   const speedSelect = document.getElementById("speedSelect");
   const muteBtn = document.getElementById("muteBtn");
   const musicBtn = document.getElementById("musicBtn");
   const musicVol = document.getElementById("musicVol");
   const pauseBtn = document.getElementById("pauseBtn");
 
-  const WALL = 3, CD0 = 3, PCOUNT = 12, COMBO_MS = 3000;
+  const WALL = 3, CD0 = 3, PCOUNT = 12, COMBO_MS = 3000, NORMAL_SPEED = 0.16;
+  // COMBO_MS is the combo window at Normal speed. comboWindow() scales it relative to
+  // the chosen speed so combos are equally reachable whether you're on Easy or Insane —
+  // slower speed gets a longer window since the snake covers less ground per second.
+  function comboWindow() { return COMBO_MS * (NORMAL_SPEED / speed); }
 
   const MAPS = { small: { cols: 16, rows: 11, cell: 32 }, medium: { cols: 22, rows: 15, cell: 28 }, large: { cols: 28, rows: 19, cell: 24 } };
 
@@ -532,40 +859,140 @@
     { emoji: "🍑", glow: "#ff9966" }, { emoji: "🍋", glow: "#ffff00" }
   ];
 
+  // ---- Shop catalogs ----
+  // Each item unlocks at a local high-score threshold. Buying never spends score —
+  // it's a permanent unlock, then a free equip. Everything here is stored locally
+  // per browser (see the SECURITY NOTES comment above) and never touches Firestore.
+  //
+  // Thresholds are deliberately tied to the three map sizes (score caps: Small 400,
+  // Medium 700, Large 1200 — see MAP_SCORE_CAPS above):
+  //   Tier 0 (0)     — everyone starts with this
+  //   Tier 1 (~120)  — reachable on Small with decent combo play
+  //   Tier 2 (~450)  — needs Medium or better (Small caps out at 400)
+  //   Tier 3 (~800)  — Large map only (Medium caps out at 700)
+  //   Tier 4 (~1050) — Large map, near-perfect run — the exclusive top tier
+  //
+  // "Golden" is a separate, non-score achievement skin: it only unlocks once you've
+  // WON (filled the whole board) on Small, Medium, AND Large at least once each —
+  // it can't be bought with score, only earned by clearing every map size.
   const SKINS = [
-    { id: "classic", name: "Classic", unlock: 0, body: "#1a237e", eye: "#ffffff" },
-    { id: "emerald", name: "Emerald", unlock: 15, body: "#00c853", eye: "#0d1117" },
-    { id: "inferno", name: "Inferno", unlock: 30, body: "#d50000", eye: "#ffee00" },
-    { id: "golden", name: "Golden", unlock: 60, body: "#ffab00", eye: "#3e2723" },
-    { id: "void", name: "Void", unlock: 100, body: "#6a1b9a", eye: "#00e5ff" }
+    { id: "classic", name: "Classic", unlock: 0,
+      body: ["#0d1b6e", "#3a56c9"], accent: "#a9c0ff", accentDash: [7, 11], accentSpeed: 20, glow: null, eye: "#ffffff" },
+    { id: "emerald", name: "Emerald", unlock: 120,
+      body: ["#00512b", "#38e07a"], accent: "#d4ffcf", accentDash: [3, 9], accentSpeed: 35, glow: "#1de973", eye: "#0d1117" },
+    { id: "inferno", name: "Inferno", unlock: 450,
+      body: ["#6a0000", "#ff8f1f"], accent: "#ffef85", accentDash: [5, 5], accentSpeed: 70, glow: "#ff4d00", eye: "#ffee00" },
+    { id: "amber", name: "Amber", unlock: 800,
+      body: ["#6b4600", "#ffd95e"], accent: "#fffada", accentDash: [11, 5], accentSpeed: 45, glow: "#ffc400", eye: "#3e2723" },
+    { id: "void", name: "Void", unlock: 1050,
+      body: ["#22063d", "#8a2be2"], accent: "#41f2ff", accentDash: [2, 12], accentSpeed: 55, glow: "#a066ff", eye: "#00e5ff" },
+    { id: "champion", name: "Golden", achievement: true,
+      body: ["#7a5c00", "#fff6d0"], accent: "#ffffff", accentDash: [1, 5], accentSpeed: 95, glow: "#ffd700", eye: "#3e2723" }
+  ];
+
+  const GRID_THEMES = [
+    { id: "meadow", name: "Meadow (default)", unlock: 0, light: "#aad751", dark: "#4a752c" },
+    { id: "sand", name: "Desert Sand", unlock: 150, light: "#e8d29a", dark: "#c9a45c" },
+    { id: "ocean", name: "Deep Ocean", unlock: 500, light: "#5fb3e0", dark: "#1c4e80" },
+    { id: "midnight", name: "Midnight", unlock: 850, light: "#4a4a68", dark: "#191926" },
+    { id: "lava", name: "Molten Lava", unlock: 1080, light: "#ff9e5e", dark: "#7a1f0d" }
+  ];
+
+  const BOUNDARY_THEMES = [
+    { id: "red", name: "Classic Red", unlock: 0, color: "#ff0000" },
+    { id: "cyan", name: "Cyber Cyan", unlock: 100, color: "#00e5ff" },
+    { id: "violet", name: "Neon Violet", unlock: 400, color: "#b266ff" },
+    { id: "gold", name: "Royal Gold", unlock: 750, color: "#ffd700" },
+    { id: "toxic", name: "Toxic Green", unlock: 1100, color: "#39ff14" }
   ];
 
   let highScore = parseInt(localStorage.getItem("hHigh"), 10) || 0;
   let mapSize = localStorage.getItem("mapSize") || "medium";
   let skinId = localStorage.getItem("skinId") || "classic";
+  let gridThemeId = localStorage.getItem("gridThemeId") || "meadow";
+  let boundaryThemeId = localStorage.getItem("boundaryThemeId") || "red";
   let musicOn = localStorage.getItem("musicOn") === "true";
   let musicVolume = parseInt(localStorage.getItem("musicVol"), 10);
   if (isNaN(musicVolume)) musicVolume = 40;
 
   highScoreEl.textContent = highScore;
 
-  function unlockedSkins() { return SKINS.filter(s => highScore >= s.unlock); }
-  function populateSkinSelect() {
-    skinSelect.innerHTML = "";
-    for (const s of SKINS) {
-      const unlocked = highScore >= s.unlock;
-      const opt = document.createElement("option");
-      opt.value = s.id;
-      opt.textContent = unlocked ? s.name : `${s.name} (score ${s.unlock}+)`;
-      opt.disabled = !unlocked;
-      skinSelect.appendChild(opt);
-    }
-    if (!unlockedSkins().some(s => s.id === skinId)) skinId = "classic";
-    skinSelect.value = skinId;
+  // Tracks which map sizes this player has WON (filled the whole board) on, at least
+  // once each. Purely local — same storage scope as everything else in the shop.
+  function getMapWins() { try { return JSON.parse(localStorage.getItem("mapsWon") || "{}"); } catch (e) { return {}; } }
+  function recordMapWin(map) { const wins = getMapWins(); if (!wins[map]) { wins[map] = true; localStorage.setItem("mapsWon", JSON.stringify(wins)); } }
+  function hasWonAllMaps() { const w = getMapWins(); return !!(w.small && w.medium && w.large); }
+  function mapWinProgressText() {
+    const w = getMapWins();
+    return ["small", "medium", "large"].map(m => `${w[m] ? "✅" : "◻️"} ${capitalize(m)}`).join("  ");
   }
+
+  // Single source of truth for "is this shop item unlocked" — score-gated items check
+  // highScore, the achievement skin checks map-win completion instead.
+  function isItemUnlocked(item) { return item.achievement ? hasWonAllMaps() : highScore >= item.unlock; }
+
+  // Guard against a stale/edited equipped id pointing at something not actually unlocked.
+  function ensureUnlocked() {
+    if (!SKINS.find(s => s.id === skinId && isItemUnlocked(s))) skinId = "classic";
+    if (!GRID_THEMES.find(g => g.id === gridThemeId && isItemUnlocked(g))) gridThemeId = "meadow";
+    if (!BOUNDARY_THEMES.find(b => b.id === boundaryThemeId && isItemUnlocked(b))) boundaryThemeId = "red";
+  }
+  ensureUnlocked();
+
   function currentSkin() { return SKINS.find(s => s.id === skinId) || SKINS[0]; }
-  skinSelect.addEventListener("change", () => { skinId = skinSelect.value; localStorage.setItem("skinId", skinId); });
-  populateSkinSelect();
+  function currentGridTheme() { return GRID_THEMES.find(g => g.id === gridThemeId) || GRID_THEMES[0]; }
+  function currentBoundaryTheme() { return BOUNDARY_THEMES.find(b => b.id === boundaryThemeId) || BOUNDARY_THEMES[0]; }
+
+  const SHOP_CATALOG = { skins: SKINS, grid: GRID_THEMES, boundary: BOUNDARY_THEMES };
+
+  function equippedIdFor(cat) { return cat === "skins" ? skinId : cat === "grid" ? gridThemeId : boundaryThemeId; }
+  function setEquippedIdFor(cat, id) {
+    if (cat === "skins") { skinId = id; localStorage.setItem("skinId", id); }
+    else if (cat === "grid") { gridThemeId = id; localStorage.setItem("gridThemeId", id); }
+    else { boundaryThemeId = id; localStorage.setItem("boundaryThemeId", id); updateContainerGlow(); }
+  }
+  function swatchStyleFor(cat, item) {
+    if (cat === "skins") return `background:linear-gradient(135deg, ${item.body[0]}, ${item.body[1]});`;
+    if (cat === "grid") return `background:linear-gradient(135deg, ${item.light} 50%, ${item.dark} 50%);`;
+    return `background:${item.color}; box-shadow:0 0 8px ${item.color};`;
+  }
+
+  function renderShop() {
+    const items = SHOP_CATALOG[shopCategory];
+    const equipped = equippedIdFor(shopCategory);
+    shopListEl.innerHTML = items.map(item => {
+      const unlocked = isItemUnlocked(item);
+      const isEquipped = item.id === equipped;
+      const style = swatchStyleFor(shopCategory, item);
+      let btnLabel, btnClass;
+      if (!unlocked) { btnLabel = "Locked"; btnClass = "locked"; }
+      else if (isEquipped) { btnLabel = "Equipped"; btnClass = "equipped"; }
+      else { btnLabel = "Buy"; btnClass = "equip"; }
+      const reqText = item.achievement
+        ? `👑 Win ALL 3 maps — ${mapWinProgressText()}`
+        : (item.unlock === 0 ? "Unlocked by default" : "Needs score " + item.unlock + "+");
+      return `
+        <div class="shop-item${unlocked ? "" : " locked"}${item.achievement ? " achievement" : ""}">
+          <div class="shop-swatch" style="${style}"></div>
+          <div class="shop-info">
+            <div class="shop-name">${item.achievement ? "👑 " : ""}${item.name}${item.achievement ? ' <span class="shop-badge">EXCLUSIVE</span>' : ""}</div>
+            <div class="shop-req">${reqText}</div>
+          </div>
+          <button class="shop-buy-btn ${btnClass}" data-id="${item.id}" ${unlocked && !isEquipped ? "" : "disabled"}>${btnLabel}</button>
+        </div>
+      `;
+    }).join("");
+
+    shopListEl.querySelectorAll(".shop-buy-btn.equip").forEach(btn => {
+      btn.addEventListener("click", () => { setEquippedIdFor(shopCategory, btn.dataset.id); renderShop(); });
+    });
+  }
+
+  function updateContainerGlow() {
+    const c = currentBoundaryTheme().color;
+    const container = document.querySelector(".canvas-container");
+    if (container) container.style.boxShadow = `0 0 30px rgba(${hexToRgb(c)},.6)`;
+  }
 
   let COLS, ROWS, CELL;
   function applyMapSize() {
@@ -580,6 +1007,7 @@
   mapSelect.value = mapSize;
   mapSelect.addEventListener("change", () => { mapSize = mapSelect.value; localStorage.setItem("mapSize", mapSize); applyMapSize(); if (gameStarted) resetGame(); });
   applyMapSize();
+  updateContainerGlow();
 
   function makeSound(src) {
     let audio = null, broken = false;
@@ -626,7 +1054,7 @@
   let animationId = null, lastTime = null;
   let comboCount = 0, comboTimer = 0, scoreSubmitted = false;
 
-  // ---- Upgrade #2: in-memory integrity tracking ----
+  // ---- In-memory integrity tracking ----
   // shadowScore/fruitsEaten are the ONLY place score is allowed to increase.
   // Every frame we check the visible `score` still equals what the game loop
   // actually earned; if a console/cheat-tool edit pokes `score` directly
@@ -648,6 +1076,7 @@
     if (detectedHacker) return;
     detectedHacker = true;
     isGameOver = true;
+    progress = 1; // snap to grid so the snake doesn't visually freeze mid-slide
     flagSuspiciousClient("in_memory_mismatch");
     gameOverSound.play();
     submitScoreIfNeeded();
@@ -712,7 +1141,7 @@
     const spots = [];
     const occupied = new Set(snake.map(c => c.x + "," + c.y));
     for (let x = 0; x < COLS; x++) for (let y = 0; y < ROWS; y++) if (!occupied.has(x + "," + y)) spots.push({ x, y });
-    if (spots.length === 0) { isWin = true; winSound.play(); submitScoreIfNeeded(); return; }
+    if (spots.length === 0) { isWin = true; recordMapWin(mapSize); winSound.play(); submitScoreIfNeeded(); return; }
     const pick = spots[Math.floor(Math.random() * spots.length)];
     food.x = pick.x; food.y = pick.y;
     food.fruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
@@ -771,19 +1200,19 @@
       fruitsEaten++;
 
       if (comboTimer > 0) comboCount++; else comboCount = 1;
-      comboTimer = COMBO_MS;
+      comboTimer = comboWindow();
 
       const gained = 1 + Math.max(0, comboCount - 1);
 
-      // Upgrade #2: shadowScore is the single source of truth for what the
-      // player actually earned this frame. `score` is only ever set FROM it.
+      // shadowScore is the single source of truth for what the player actually earned
+      // this frame. `score` is only ever set FROM it.
       shadowScore += gained;
       score = shadowScore;
       scoreEl.textContent = score;
 
       explode(food.x, food.y, hexToRgb(food.fruit.glow));
 
-      if (score > highScore) { highScore = score; localStorage.setItem("hHigh", String(highScore)); highScoreEl.textContent = highScore; populateSkinSelect(); }
+      if (score > highScore) { highScore = score; localStorage.setItem("hHigh", String(highScore)); highScoreEl.textContent = highScore; }
 
       spawnFood();
     } else {
@@ -810,8 +1239,8 @@
       if (isGameOver || isWin) break;
     }
 
-    // Upgrade #2: integrity check every frame. Any external tampering with
-    // `score` that doesn't go through the eat-fruit path above is caught here.
+    // Integrity check every frame. Any external tampering with `score` that
+    // doesn't go through the eat-fruit path above is caught here.
     checkIntegrity();
     if (detectedHacker) return;
 
@@ -833,7 +1262,8 @@
     ctx.save();
     ctx.translate(WALL, WALL);
 
-    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) { ctx.fillStyle = (c + r) % 2 === 0 ? "#aad751" : "#4a752c"; ctx.fillRect(c * CELL, r * CELL, CELL, CELL); }
+    const gridTheme = currentGridTheme();
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) { ctx.fillStyle = (c + r) % 2 === 0 ? gridTheme.light : gridTheme.dark; ctx.fillRect(c * CELL, r * CELL, CELL, CELL); }
 
     if (!isWin) {
       ctx.shadowBlur = 20; ctx.shadowColor = food.fruit.glow;
@@ -844,23 +1274,47 @@
 
     if (snake.length > 0) {
       const skin = currentSkin();
-      ctx.strokeStyle = skin.body; ctx.lineWidth = CELL - 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-      ctx.beginPath();
 
       const p = (isGameOver || isWin) ? 1 : progress;
       const first = snake[0], second = snake[1] || first;
       const startX = (second.x + (first.x - second.x) * p) * CELL + CELL / 2;
       const startY = (second.y + (first.y - second.y) * p) * CELL + CELL / 2;
-      ctx.moveTo(startX, startY);
 
+      // Build the path once so it can be stroked twice (base body, then accent stripe)
+      // without recomputing the smooth head/tail interpolation twice.
+      const bodyPath = new Path2D();
+      bodyPath.moveTo(startX, startY);
       for (let i = 1; i < snake.length; i++) {
         const current = snake[i], prev = snake[i - 1];
         let x, y;
         if (i === snake.length - 1) { x = (current.x + (prev.x - current.x) * p) * CELL + CELL / 2; y = (current.y + (prev.y - current.y) * p) * CELL + CELL / 2; }
         else { x = current.x * CELL + CELL / 2; y = current.y * CELL + CELL / 2; }
-        ctx.lineTo(x, y);
+        bodyPath.lineTo(x, y);
       }
-      ctx.stroke();
+
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+      // Base body: two-stop gradient across the board, plus a glow for skins that have one.
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, skin.body[0]);
+      grad.addColorStop(1, skin.body[1]);
+      if (skin.glow) { ctx.shadowBlur = 14; ctx.shadowColor = skin.glow; } else { ctx.shadowBlur = 0; }
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = CELL - 2;
+      ctx.stroke(bodyPath);
+      ctx.shadowBlur = 0;
+
+      // Accent stripe: a thin dashed line traced down the same path, animated so each
+      // skin reads as a distinct material (scales / flame lick / metal shine / energy pulse).
+      if (skin.accent) {
+        ctx.save();
+        ctx.setLineDash(skin.accentDash);
+        ctx.lineDashOffset = -(performance.now() / 1000) * skin.accentSpeed;
+        ctx.strokeStyle = skin.accent;
+        ctx.lineWidth = Math.max(2, (CELL - 2) * 0.24);
+        ctx.stroke(bodyPath);
+        ctx.restore();
+      }
 
       ctx.fillStyle = skin.eye;
       ctx.beginPath();
@@ -875,8 +1329,9 @@
 
     for (const p of particles) { ctx.fillStyle = `rgba(${p.color},${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
 
+    const boundaryColor = currentBoundaryTheme().color;
     ctx.shadowBlur = 15;
-    ctx.shadowColor = detectedHacker ? "#ff0000" : (isWin ? "#3fb950" : "#ff0000");
+    ctx.shadowColor = detectedHacker ? "#ff0000" : (isWin ? "#3fb950" : boundaryColor);
     ctx.strokeStyle = ctx.shadowColor;
     ctx.lineWidth = WALL;
     ctx.strokeRect(WALL / 2, WALL / 2, canvas.width - WALL, canvas.height - WALL);
@@ -891,7 +1346,6 @@
       if (isCd) { ctx.fillStyle = "#ffda6a"; ctx.font = "bold 64px sans-serif"; ctx.fillText(cdVal, canvas.width / 2, canvas.height / 2); }
 
       if (isGameOver && detectedHacker) {
-        // Upgrade #2: dedicated hacker-detected overlay, distinct from a normal game over.
         ctx.fillStyle = "#ff1744";
         ctx.font = "bold 40px sans-serif";
         ctx.fillText("⚠ HACKER DETECTED ⚠", canvas.width / 2, canvas.height / 2 - 20);
