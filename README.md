@@ -2,7 +2,7 @@
 
 A fully-featured, polished Snake game built from scratch — smooth gliding movement, a real progression system, a live global leaderboard, and full support for **PC, mobile, and TV remotes**.
 
-**🎮 Play it now → [minahilobaid-lgtm.github.io/snake-game](https://minahilobaid-lgtm.github.io/snake-game/)**
+**🎮 Play it now → (https://minahilobaid-lgtm.github.io/snake-game/)**
 
 ---
 
