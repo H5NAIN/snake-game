@@ -813,7 +813,7 @@
      ["hHigh", "skinId", "gridThemeId", "boundaryThemeId", "playerName", "playerId", "mapSize",
 "musicOn", "musicVol", "flagCount", "lastFlagReason", "mapsWon"].forEach(k =>
 localStorage.removeItem(k));
- localStorage.setItem("musicVol", "100"); // Force clean slate to 100% volume layout
+ localStorage.setItem("musicVol", "60"); // Force clean slate to 100% volume layout
  localStorage.setItem("musicOn", "true");
  location.reload();
 
@@ -1104,7 +1104,8 @@ localStorage.removeItem(k));
   let gridThemeId = localStorage.getItem("gridThemeId") || "meadow";
   let boundaryThemeId = localStorage.getItem("boundaryThemeId") || "red";
   let musicOn = localStorage.getItem("musicOn") !== "false";
-let musicVolume = localStorage.getItem("musicVol") !== null ? parseInt(localStorage.getItem("musicVol"), 10) : 100;
+let musicVolume = localStorage.getItem("musicVol") !== null ? parseInt(localStorage.getItem("musicVol"), 10) : 60;
+
   highScoreEl.textContent = highScore;
 
   // Tracks which map sizes this player has WON (filled the whole board) on, at least
@@ -1381,7 +1382,10 @@ function playBuffered(name) {
 
   musicVol.value = musicVolume;
   musicVol.addEventListener("input", () => { musicVolume = parseInt(musicVol.value, 10); localStorage.setItem("musicVol", String(musicVolume)); if (bgm) bgm.volume = musicVolume / 100; });
-  updateMusicBtn();
+  if (musicVol) {
+  musicVol.value = musicVolume; 
+}
+updateMusicBtn();
 
   // ---- Mobile audio unlock ----
   // On phones (iOS Safari especially), a browser will only let audio actually
@@ -1408,9 +1412,19 @@ function playBuffered(name) {
     });
     tryPlayMusic();
   }
-  window.addEventListener("keydown", unlockAllAudio, { once: true });
-  window.addEventListener("pointerdown", unlockAllAudio, { once: true });
-  window.addEventListener("touchend", unlockAllAudio, { once: true });
+  function forceBrowserAudioWake() {
+  // Directly unfreeze the low-latency game sound systems
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  // Run your game's original audio unlock sequence
+  unlockAllAudio();
+}
+
+// Watch for any first interaction on the page to trigger the sound instantly
+["click", "pointerdown", "touchstart", "keydown"].forEach(eventType => {
+  window.addEventListener(eventType, forceBrowserAudioWake, { once: true });
+});
 
   let score = 0;
   let snake = [];
