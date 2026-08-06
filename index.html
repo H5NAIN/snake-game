@@ -626,7 +626,7 @@
 
   <div class="volume-wrap">
     <button id="musicBtn">🎵 Music</button>
-    <input type="range" id="musicVol" min="0" max="100" value="100">
+    <input type="range" id="musicVol" min="0" max="100" value="40">
   </div>
 
   <button id="pauseBtn">⏸ Pause (P)</button>
@@ -1098,9 +1098,9 @@
   let skinId = localStorage.getItem("skinId") || "classic";
   let gridThemeId = localStorage.getItem("gridThemeId") || "meadow";
   let boundaryThemeId = localStorage.getItem("boundaryThemeId") || "red";
-  let musicOn = true;
-let musicVolume = 100;
-
+  let musicOn = localStorage.getItem("musicOn") === "true";
+  let musicVolume = parseInt(localStorage.getItem("musicVol"), 10);
+  if (isNaN(musicVolume)) musicVolume = 40;
 
   highScoreEl.textContent = highScore;
 
@@ -1278,18 +1278,16 @@ let musicVolume = 100;
   updateContainerGlow();
 
   function makeSound(src) {
- let audio = null, broken = false;
- try { audio = new Audio(src); audio.volume = 1.0; } catch (e) { broken = true; }
- return {
- audio,
- play() { if (broken || !audio || sfxMuted) return; try { audio.currentTime = 0; const p =
-audio.play(); if (p && typeof p.catch === "function") p.catch(() => {}); } catch (e) {} }
- };
- }
-const eatSound = makeSound("./sounds/eat.mp3");
-const gameOverSound = makeSound("./sounds/gameover.mp3");
-const winSound = makeSound("./sounds/win.mp3");
-
+    let audio = null, broken = false;
+    try { audio = new Audio(src); audio.volume = 0.5; } catch (e) { broken = true; }
+    return {
+      audio,
+      play() { if (broken || !audio || sfxMuted) return; try { audio.currentTime = 0; const p = audio.play(); if (p && typeof p.catch === "function") p.catch(() => {}); } catch (e) {} }
+    };
+  }
+  const eatSound = makeSound("sounds/eat.mp3");
+  const gameOverSound = makeSound("sounds/gameover.mp3");
+  const winSound = makeSound("sounds/win.mp3");
 
   // ---- Low-latency sound effects (Web Audio API) ----
   // The HTML <audio> approach above (reset currentTime + play() on the same
@@ -1314,43 +1312,34 @@ const winSound = makeSound("./sounds/win.mp3");
           .then(buf => audioCtx.decodeAudioData(buf))
           .then(decoded => { soundBuffers[name] = decoded; })
           .catch(e => console.warn("Could not load sound:", src, e));
-      }; loadSound("eat", "./sounds/eat.mp3");
- loadSound("gameover", "./sounds/gameover.mp3");
- loadSound("win", "./sounds/win.mp3");
-
+      };
+      loadSound("eat", "sounds/eat.mp3");
+      loadSound("gameover", "sounds/gameover.mp3");
+      loadSound("win", "sounds/win.mp3");
     } catch (e) { console.warn("Web Audio API unavailable, falling back to HTML Audio.", e); audioCtx = null; }
   }
   function playBuffered(name) {
- if (sfxMuted) return;
- if (audioCtx && soundBuffers[name]) {
- if (audioCtx.state === "suspended") audioCtx.resume();
- const src = audioCtx.createBufferSource();
- src.buffer = soundBuffers[name];
-
- // Volume Booster Node
- const gainNode = audioCtx.createGain();
- gainNode.gain.setValueAtTime(2.5, audioCtx.currentTime); 
- src.connect(gainNode);
- gainNode.connect(audioCtx.destination);
-
- src.start(0);
- return;
- }
-
- const fallback = { eat: eatSound, gameover: gameOverSound, win: winSound }[name];
- if (fallback) fallback.play();
- }
-
+    if (sfxMuted) return;
+    if (audioCtx && soundBuffers[name]) {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const src = audioCtx.createBufferSource();
+      src.buffer = soundBuffers[name];
+      src.connect(audioCtx.destination);
+      src.start(0);
+      return;
+    }
+    const fallback = { eat: eatSound, gameover: gameOverSound, win: winSound }[name];
+    if (fallback) fallback.play();
+  }
 
   let sfxMuted = false;
   muteBtn.addEventListener("click", () => { sfxMuted = !sfxMuted; muteBtn.textContent = sfxMuted ? "🔇 SFX" : "🔊 SFX"; });
 
   let bgm = null;
-try {
- bgm = new Audio("./sounds/bgm.mp3");
- bgm.loop = true;
- bgm.volume = musicVolume / 100;
-
+  try {
+    bgm = new Audio("sounds/bgm.mp3");
+    bgm.loop = true;
+    bgm.volume = musicVolume / 100;
     bgm.addEventListener("ended", () => { if (musicOn) { bgm.currentTime = 0; tryPlayMusic(); } });
   } catch (e) { bgm = null; }
 
