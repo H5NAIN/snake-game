@@ -1,6 +1,6 @@
 # 🐍 Google Play Arcade: Husnain Edition
 
-A fully-featured, polished Snake game built from scratch — smooth gliding movement, a real progression system, a live global leaderboard, and full support for **PC, mobile, and TV remotes**.
+A fully-featured, polished Snake game built from scratch — smooth gliding movement, a real progression system, a live global leaderboard, and full support for **PC, mobile**.
 
 **🎮 Play it now → (https://minahilobaid-lgtm.github.io/snake-game/)**
 
@@ -23,9 +23,6 @@ A fully-featured, polished Snake game built from scratch — smooth gliding move
 |---|---|---|---|
 | **PC** | Arrow keys / WASD | Enter | P |
 | **Mobile** | Swipe anywhere on screen | Tap | Pause button |
-| **Smart TV remote** | D-pad | OK (center button) | OK / P |
-
-On a TV, the D-pad also navigates menus and the shop with a visible highlight — no mouse needed.
 
 ## 🛠️ Built With
 
