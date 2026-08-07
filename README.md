@@ -2,11 +2,11 @@
 
 A fast, polished browser Snake game built as a single HTML file — no install, no build step, just open it and play. Runs fully offline (except the live global leaderboard, which needs internet).
 
-**Made by Husnain.**
+**Made by HUSNAIN.**
 
 ---
 
-## 🎮 Play it by clicking this link (https://minahilobaid-lgtm.github.io/snake-game/)
+## 🎮 Play it by clicking this link (https://h5nain.github.io/snake-game/)
 
 It works on all devices like desktop, mobile, tablet, or a Smart TV browser (Android TV / Bravia and similar).
 
