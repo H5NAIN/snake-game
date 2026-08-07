@@ -1,4 +1,4 @@
-# 🐍 Google Play Arcade: Husnain Edition
+# 🐍 Google Play Arcade: Snake Game
 
 A fast, polished browser Snake game built as a single HTML file — no install, no build step, just open it and play. Runs fully offline (except the live global leaderboard, which needs internet).
 
@@ -6,9 +6,9 @@ A fast, polished browser Snake game built as a single HTML file — no install, 
 
 ---
 
-## 🎮 Play it
+## 🎮 Play it by clicking this link (https://minahilobaid-lgtm.github.io/snake-game/)
 
-Open `index.html` in any modern browser — desktop, mobile, tablet, or a Smart TV browser (Android TV / Bravia and similar).
+It works on all devices like desktop, mobile, tablet, or a Smart TV browser (Android TV / Bravia and similar).
 
 Works fully offline. Only the global leaderboard requires an internet connection — everything else (movement, sound, shop, skins, controls) works with no connection at all.
 
@@ -57,15 +57,6 @@ Controls automatically adapt to the device you're playing on:
 Score validation (grid-size score caps + in-memory integrity checks) runs client-side, which stops casual tampering but can't fully stop a determined attacker from hitting Firestore directly. The durable fix is mirroring the same score caps in **Firestore Security Rules** — see the comment block at the top of the `<script>` section in `index.html` for the exact rule to add in the Firebase console.
 
 The shop (skins/themes/unlocks) is stored entirely in each browser's local storage and never touches the shared Firestore leaderboard — it's private per-device progress, separate from everyone else's global scores.
-
----
-
-## 📌 Planned / upcoming features
-
-- Non-rectangular map shapes (L, T, F, etc.) for a harder challenge mode
-- Player review system (with owner-only replies)
-- Optional laser hazards for extra difficulty
-- More shop items
 
 ---
 
