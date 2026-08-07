@@ -27,7 +27,8 @@ Works fully offline. Only the global leaderboard requires an internet connection
   - Everything unlocks by reaching score milestones — nothing is ever spent, unlocks are permanent.
 - **Reset Game button** — wipes your own leaderboard entry and all local progress, so you can start fresh as a new player.
 - **In-memory anti-cheat** — flags and discards runs where the score doesn't match what was actually earned in-game (see *Security notes* below).
-- **Real emoji fruit art** — same emoji artwork (via Twemoji) on every device, instead of each device's own inconsistent emoji font.
+- **Real emoji fruit art** — same emoji artwork (via Twemoji) on every device, instead each device's own inconsistent emoji font.
+- **Review button** - Anyone from the world can give reviews and rate the game.
 
 ---
 
