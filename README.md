@@ -1,6 +1,6 @@
 # 🐍 Google Play Arcade: Snake Game
 
-A fast, polished browser Snake game built as a single HTML file — no install, no build step, just open it and play. Runs fully offline (except the live global leaderboard, which needs internet).
+A fast, polished browser Snake game built as a single HTML file — no install, no build step, just open it and play. Runs fully offline (except the live global leaderboard update and giving reviews, which needs internet).
 
 **Made by HUSNAIN.**
 
@@ -8,9 +8,9 @@ A fast, polished browser Snake game built as a single HTML file — no install, 
 
 ## 🎮 Play it by clicking this link (https://h5nain.github.io/snake-game/)
 
-It works on all devices like desktop, mobile, tablet, or a Smart TV browser (Android TV / Bravia and similar).
+It works on all devices like desktop, mobiles, tablets.
 
-Works fully offline. Only the global leaderboard requires an internet connection — everything else (movement, sound, shop, skins, controls) works with no connection at all.
+Works fully offline. Only the global leaderboard and giving reviews to game requires an internet connection — everything else (movement, sound, shop, skins, controls) works with no connection at all.
 
 ---
 
@@ -40,10 +40,8 @@ Controls automatically adapt to the device you're playing on:
 |---|---|
 | **PC / laptop** | Arrow keys or WASD to move · `P` or `Enter` to pause/resume · Spacebar/Enter to restart |
 | **Phone / tablet** | Swipe anywhere on the page, **or** tap the on-screen D-pad below the game — both work at the same time, use whichever you prefer |
-| **Smart TV (Android TV / Bravia, etc.)** | Full D-pad remote support: steer the snake in-game, and navigate every menu/button (before the game starts, on pause, and on game-over/win screens) by pressing the D-pad — the selected button highlights, and the center **OK** button activates it, exactly like a native TV app |
 
 ---
-
 ## 🔧 Tech notes
 
 - Single self-contained HTML file — HTML, CSS, and JavaScript all in one place.
